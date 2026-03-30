@@ -342,16 +342,19 @@ class SubmissionCoordinator:
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.info("start_command reached, user_id=%s", update.effective_user.id if update.effective_user else None)
+
     coordinator: SubmissionCoordinator = context.application.bot_data["coordinator"]
     user = update.effective_user
-    if user is None or not coordinator.is_admin(user.id):
+
+    if user is None:
         return
-    await update.effective_message.reply_text(
-        "Send one or more manga/comic images.\n"
-        "The bot will detect English text, translate it into natural Burmese, redraw it in place, and return the edited pages in order.\n\n"
-        "Supported: single images, multiple separate images, and albums/media groups.\n"
-        "Use /help for tips and limits."
-    )
+
+    if not coordinator.is_admin(user.id):
+        await update.effective_message.reply_text(f"Not allowed. Your user id = {user.id}")
+        return
+
+    await update.effective_message.reply_text("Bot is working.")
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
