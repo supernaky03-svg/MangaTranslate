@@ -120,18 +120,7 @@ class OCRService:
             normalized.append(RawOCRResult(polygon=polygon, text=str(text), confidence=confidence))
         return normalized
 
-    @staticmethod
-    def _prepare_for_ocr(image: np.ndarray) -> tuple[np.ndarray, float]:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        gray = cv2.bilateralFilter(gray, 5, 75, 75)
-        gray = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX)
-
-        scale = 1.0
-        if min(gray.shape[:2]) < 900:
-            scale = max(1.0, 1100 / float(min(gray.shape[:2])))
-            gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-
-        return gray, scale
+    
 
     def _filter_and_normalize(
         self,
@@ -156,7 +145,28 @@ class OCRService:
                 (
                     int(round(min(max(x * inv_scale, 0.0), width - 1))),
                     int(round(min(max(y * inv_scale, 0.0), height - 1))),
-                )
+                @staticmethod
+def _prepare_for_ocr(image: np.ndarray) -> tuple[np.ndarray, float]:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = cv2.bilateralFilter(gray, 5, 75, 75)
+    gray = cv2.normalize(gray, None, 0, 255, cv2.NORM_MINMAX)
+
+    scale = 1.0
+
+    h, w = gray.shape[:2]
+    max_side = max(h, w)
+
+    if max_side > 1800:
+        down = 1800 / float(max_side)
+        gray = cv2.resize(gray, None, fx=down, fy=down, interpolation=cv2.INTER_AREA)
+        scale *= down
+
+    if min(gray.shape[:2]) < 900:
+        up = max(1.0, 900 / float(min(gray.shape[:2])))
+        gray = cv2.resize(gray, None, fx=up, fy=up, interpolation=cv2.INTER_CUBIC)
+        scale *= up
+
+    return gray, scale)
                 for x, y in result.polygon
             ]
 
