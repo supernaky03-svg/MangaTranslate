@@ -9,30 +9,48 @@ from typing import Iterable
 
 import cv2
 import numpy as np
-
+import threading
 from .config import Settings
+from .importom .config import Settings
 from .models import OCRRegion
 
 logger = logging.getLogger(__name__)
-
 
 @dataclass(slots=True)
 class RawOCRResult:
     polygon: list[tuple[int, int]]
     text: str
     confidence: float
-
+    
 
 class OCRService:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings):
         self.settings = settings
         self._lock = threading.Lock()
-        import easyocr  # imported lazily because initialization is heavy
+        self.reader = None
 
-        logger.info("Initializing EasyOCR with languages=%s gpu=%s", settings.ocr_languages, settings.ocr_gpu)
-        self.reader = easyocr.Reader(list(settings.ocr_languages), gpu=settings.ocr_gpu)
+    def _ensure_reader(self):
+        if self.reader is not None:
+            return
 
-    def detect_regions(self, image: np.ndarray) -> list[OCRRegion]:
+        with self._lock:
+            if self.reader is not None:
+                return
+
+            logger.info("About to import easyocr")
+            import easyocr
+            logger.info(
+                "Initializing EasyOCR with languages=%s gpu=%s",
+                self.settings.ocr_languages,
+                self.settings.ocr_gpu,
+            )
+            self.reader = easyocr.Reader(
+                list(self.settings.ocr_languages),
+                gpu=self.settings.ocr_gpu,
+            )
+
+    def detect_regions(self, image):
+        self._ensure_reader()
         prepared, scale = self._prepare_for_ocr(image)
         raw = self._readtext(prepared)
         filtered = self._filter_and_normalize(raw, image.shape[1], image.shape[0], scale)
