@@ -51,7 +51,40 @@ class OCRService:
             )
             logger.info("EasyOCR ready")
 
-    def detect_regions(self, image: np.ndarray) -> list[OCRRegion]:
+    def detect_regions(self, image):
+    self._ensure_reader()
+
+    h, w = image.shape[:2]
+    if h > 2200:
+        all_regions = []
+        tile_h = 1600
+        overlap = 180
+        step = tile_h - overlap
+
+        for y0 in range(0, h, step):
+            y1 = min(h, y0 + tile_h)
+            tile = image[y0:y1, :]
+            tile_regions = self._detect_regions_single(tile)
+
+            for r in tile_regions:
+                r.polygon = [(x, y + y0) for x, y in r.polygon]
+                x1, yy1, x2, yy2 = r.bbox
+                r.bbox = (x1, yy1 + y0, x2, yy2 + y0)
+                wx1, wy1, wx2, wy2 = r.write_bbox
+                r.write_bbox = (wx1, wy1 + y0, wx2, wy2 + y0)
+
+            all_regions.extend(tile_regions)
+            if y1 == h:
+                break
+
+        merged = self._merge_adjacent(all_regions)
+        ordered = self._sort_reading_order(merged)
+        return ordered[: self.settings.max_text_regions_per_image]
+
+    return self._detect_regions_single(image)
+
+    
+    def detect_regions_single(self, image: np.ndarray) -> list[OCRRegion]:
         self._ensure_reader()
 
         prepared, scale = self._prepare_for_ocr(image)
@@ -60,7 +93,7 @@ class OCRService:
         merged = self._merge_adjacent(filtered)
         ordered = self._sort_reading_order(merged)
         return ordered[: self.settings.max_text_regions_per_image]
-
+        
     def _readtext(self, image: np.ndarray) -> list[RawOCRResult]:
         with self._lock:
             results = self.reader.readtext(
