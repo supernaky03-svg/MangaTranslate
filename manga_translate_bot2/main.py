@@ -40,19 +40,38 @@ def keep_alive() -> None:
     Thread(target=run_web, daemon=True).start()
     
 
+# main.py
+
 def main() -> None:
     settings = load_settings()
     configure_logging(settings.log_level)
+
     keep_alive()
 
     logger = logging.getLogger(__name__)
     logger.info("Starting manga translation bot")
     logger.info("Admins configured: %s", sorted(settings.admin_user_ids))
 
+    logger.info("Creating OCR service...")
     ocr_service = OCRService(settings)
+    logger.info("OCR service ready")
+
+    logger.info("Creating translator...")
     translator = build_translation_service(settings)
-    processor = MangaImageProcessor(settings=settings, ocr_service=ocr_service, translator=translator)
+    logger.info("Translator ready")
+
+    logger.info("Creating image processor...")
+    processor = MangaImageProcessor(
+        settings=settings,
+        ocr_service=ocr_service,
+        translator=translator,
+    )
+    logger.info("Image processor ready")
+
+    logger.info("Building Telegram application...")
     application = build_application(settings=settings, processor=processor)
+
+    logger.info("Starting Telegram polling...")
     application.run_polling(drop_pending_updates=False)
 
 
