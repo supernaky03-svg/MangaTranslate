@@ -45,35 +45,34 @@ def keep_alive() -> None:
 def main() -> None:
     settings = load_settings()
     configure_logging(settings.log_level)
-
     keep_alive()
 
     logger = logging.getLogger(__name__)
     logger.info("Starting manga translation bot")
     logger.info("Admins configured: %s", sorted(settings.admin_user_ids))
 
-    logger.info("Creating OCR service...")
+    logger.info("Before OCRService")
     ocr_service = OCRService(settings)
-    logger.info("OCR service ready")
+    logger.info("After OCRService")
 
-    logger.info("Creating translator...")
+    logger.info("Before translator")
     translator = build_translation_service(settings)
-    logger.info("Translator ready")
+    logger.info("After translator")
 
-    logger.info("Creating image processor...")
+    logger.info("Before processor")
     processor = MangaImageProcessor(
         settings=settings,
         ocr_service=ocr_service,
         translator=translator,
     )
-    logger.info("Image processor ready")
+    logger.info("After processor")
 
-    logger.info("Building Telegram application...")
+    logger.info("Before build_application")
     application = build_application(settings=settings, processor=processor)
+    logger.info("Before run_polling")
 
-    logger.info("Starting Telegram polling...")
     application.run_polling(drop_pending_updates=False)
-
+    
 
 if __name__ == "__main__":
     main()
