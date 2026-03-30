@@ -42,28 +42,46 @@ class MangaImageProcessor:
         self.translator = translator
         self.font_path = settings.resolve_font_path()
 
+
     def process_image(self, input_path: Path, output_path: Path) -> ProcessedImageResult:
-        warnings: list[str] = []
-        image = load_image_bgr(input_path)
+    warnings: list[str] = []
 
-        try:
-            regions = self.ocr_service.detect_regions(image)
-        except Exception as exc:
-            logger.exception("OCR failed for %s", input_path)
-            shutil.copy2(input_path, output_path)
-            return ProcessedImageResult(
-                output_path=output_path,
-                regions=[],
-                had_text=False,
-                warnings=[f"OCR failed: {exc}"],
-            )
+    image = load_image_bgr(input_path)
 
-        if not regions:
-            shutil.copy2(input_path, output_path)
-            return ProcessedImageResult(output_path=output_path, regions=[], had_text=False)
+    try:
+        regions = self.ocr_service.detect_regions(image)
+    except Exception as exc:
+        logger.exception("OCR failed for %s", input_path)
+        shutil.copy2(input_path, output_path)
+        return ProcessedImageResult(
+            output_path=output_path,
+            regions=[],
+            had_text=False,
+            warnings=[f"OCR failed: {exc}"],
+        )
 
-        working = image.copy()
-        rendered_regions: list[RenderedRegion] = []
+    if not regions:
+        shutil.copy2(input_path, output_path)
+        return ProcessedImageResult(
+            output_path=output_path,
+            regions=[],
+            had_text=False,
+        )
+
+    rendered_regions: list[RenderedRegion] = []
+
+    try:
+        # 1) original image ကို တစ်ခါပဲ copy လုပ်
+        working = self._remove_original_text(image.copy(), regions)
+
+        # 2) background prepare ကိုလည်း တစ်ခါပဲလုပ်
+        self._prepare_background_for_regions(working, regions)
+
+        # 3) PIL conversion တစ်ခါပဲလုပ်
+        pil_image = Image.fromarray(cv2.cvtColor(working, cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(pil_image)
+
+        # 4) region တစ်ခုချင်းစီကို တူညီတဲ့ canvas ပေါ်မှာပဲဆက်ရေး
         for region in regions:
             try:
                 translated = self.translator.translate(region.text)
@@ -74,12 +92,7 @@ class MangaImageProcessor:
                 translated = region.text
 
             try:
-                trial = self._remove_original_text(working.copy(), [region])
-                self._prepare_background_for_regions(trial, [region])
-                pil_image = Image.fromarray(cv2.cvtColor(trial, cv2.COLOR_BGR2RGB))
-                draw = ImageDraw.Draw(pil_image)
                 written_text = self._draw_region(draw, pil_image, region, translated)
-                working = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
             except Exception:
                 logger.exception("Render failed for region %r in %s", region.text, input_path)
                 warnings.append(f"Render failed for region: {region.text}")
@@ -105,13 +118,26 @@ class MangaImageProcessor:
                 debug={"regions_detected": len(regions)},
             )
 
+        # 5) NumPy/BGR ပြန်ပြောင်းတာလည်း နောက်ဆုံးမှ တစ်ခါပဲလုပ်
+        working = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
         save_image_bgr(output_path, working)
+
         return ProcessedImageResult(
             output_path=output_path,
             regions=rendered_regions,
             had_text=True,
             warnings=warnings,
             debug={"regions_detected": len(regions)},
+        )
+
+    except Exception as exc:
+        logger.exception("Processing failed for %s", input_path)
+        shutil.copy2(input_path, output_path)
+        return ProcessedImageResult(
+            output_path=output_path,
+            regions=[],
+            had_text=False,
+            warnings=warnings + [f"Processing failed: {exc}"],
         )
 
     @staticmethod
