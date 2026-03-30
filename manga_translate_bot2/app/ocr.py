@@ -95,31 +95,37 @@ class OCRService:
         return ordered[: self.settings.max_text_regions_per_image]
         
     def _readtext(self, image: np.ndarray) -> list[RawOCRResult]:
-        with self._lock:
+    with self._lock:
+        results = self.reader.readtext(
+            image,
+            detail=1,
+            paragraph=False,
+            decoder="greedy",
+            beamWidth=1,
+            text_threshold=0.60,
+            low_text=0.30,
+            link_threshold=0.25,
+            width_ths=0.5,
+            y_ths=0.35,
+            height_ths=0.6,
+            mag_ratio=1.0,
+        )
+
+        if len(results) < 3:
             results = self.reader.readtext(
                 image,
                 detail=1,
                 paragraph=False,
                 decoder="beamsearch",
-                beamWidth=5,
-                text_threshold=0.65,
-                low_text=0.35,
+                beamWidth=3,
+                text_threshold=0.60,
+                low_text=0.30,
                 link_threshold=0.25,
                 width_ths=0.5,
                 y_ths=0.35,
                 height_ths=0.6,
-                mag_ratio=1.2,
+                mag_ratio=1.1,
             )
-
-        normalized: list[RawOCRResult] = []
-        for item in results:
-            if len(item) < 3:
-                continue
-            box, text, confidence = item[0], item[1], float(item[2])
-            polygon = [(int(p[0]), int(p[1])) for p in box]
-            normalized.append(RawOCRResult(polygon=polygon, text=str(text), confidence=confidence))
-        return normalized
-
     
 
     def _filter_and_normalize(
