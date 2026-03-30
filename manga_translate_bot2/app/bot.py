@@ -342,11 +342,19 @@ class SubmissionCoordinator:
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    coordinator: SubmissionCoordinator = context.application.bot_data["coordinator"]
     user = update.effective_user
-    logger.info("START reached; user_id=%s username=%s", user.id if user else None, user.username if user else None)
 
-    if update.effective_message:
-        await update.effective_message.reply_text(f"start reached, your id = {user.id if user else 'unknown'}")
+    if user is None:
+        return
+
+    if not coordinator.is_admin(user.id):
+        await update.effective_message.reply_text("You are not allowed to use this bot.")
+        return
+
+    await update.effective_message.reply_text(
+        "Send one or more manga/comic images and I will translate the English text into Myanmar."
+    )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
